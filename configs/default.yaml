@@ -1,0 +1,71 @@
+# OSA-Adapt Default Experiment Configuration
+
+# Adaptation method settings
+adaptation:
+  # FiLM hyperparameters
+  condition_dim: 64
+  film_scale_factor: 0.1
+  lr: 5.0e-5
+  max_epochs: 50
+  patience: 5
+  bn_momentum: 0.01
+
+  # Severity-aware N1 loss
+  gamma_default: 2.0
+  gamma_n1_base: 2.5
+  gamma_n1_increment: 0.5
+  n1_weight_multiplier: 2.0
+  label_smoothing: 0.05
+
+  # LoRA baseline
+  lora_rank: 4
+
+# Cross-validation settings
+cross_validation:
+  n_folds: 5
+  n_seeds: 5
+  seed: 42
+
+# Data budget settings (number of labeled patients)
+budgets: [5, 10, 20, 30, 50, 65, 100]
+
+# Models to evaluate
+models:
+  - Chambon2018
+  - TinySleepNet
+
+# Adaptation methods to compare
+methods:
+  - osa_adapt
+  - full_ft
+  - last_layer
+  - lora
+  - film_no_severity
+  - bn_only
+  - no_adapt
+  - coral
+  - mmd
+
+# Data settings
+data:
+  pkl_dir: "data/preprocessed"
+  severity_json: "data/patient_severity.json"
+  channel_name: "C4-M1"
+  fallback_channel_prefix: "C"
+
+# Training settings
+training:
+  batch_size: 128
+  num_workers: 0
+  pin_memory: false
+
+# Output settings
+output:
+  output_dir: "results"
+  save_per_patient: true
+  save_training_history: true
+
+# Logging
+logging:
+  level: "INFO"
+  log_to_file: true

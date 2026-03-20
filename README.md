@@ -152,14 +152,19 @@ A severity metadata JSON maps patient IDs to clinical variables:
 ### Results Visualization
 
 <p align="center">
-  <img src="figures/data_efficiency_curves.png" width="45%" alt="Data efficiency curves showing OSA-Adapt vs baselines across different labeled patient budgets"/>
-  &nbsp;&nbsp;
-  <img src="figures/confusion_matrices.png" width="45%" alt="Per-severity confusion matrices"/>
+  <img src="figures/data_efficiency_curves.png" width="80%" alt="Data efficiency curves showing OSA-Adapt vs baselines across different labeled patient budgets"/>
 </p>
 
 <p align="center">
-  <em>Left: Data efficiency curves (Fig. 1). OSA-Adapt maintains superior performance even with as few as 5 labeled patients.<br/>
-  Right: Per-severity confusion matrices (Fig. 4). Note the improved N1 detection in severe OSA patients.</em>
+  <em>Fig. 1: Data efficiency curves (Chambon2018 backbone). OSA-Adapt maintains superior performance even with as few as 5 labeled patients, validating the ACM hypothesis.</em>
+</p>
+
+<p align="center">
+  <img src="figures/confusion_matrices.png" width="90%" alt="Per-severity confusion matrices"/>
+</p>
+
+<p align="center">
+  <em>Fig. 2: Per-severity confusion matrices. Note the improved N1 detection in severe OSA patients — the key clinical contribution of severity-aware FiLM conditioning.</em>
 </p>
 
 > To generate these figures from your own results, run: `python experiments/generate_paper_figures.py --results_dir results/`

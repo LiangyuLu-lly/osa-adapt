@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch 1.12+](https://img.shields.io/badge/pytorch-1.12+-ee4c2c.svg)](https://pytorch.org/)
+[![CI](https://github.com/LiangyuLu-lly/osa-adapt/actions/workflows/ci.yml/badge.svg)](https://github.com/LiangyuLu-lly/osa-adapt/actions/workflows/ci.yml)
 
 Official implementation of:
 
@@ -148,6 +149,21 @@ A severity metadata JSON maps patient IDs to clinical variables:
 | MMD | ~400K | 63.87 ± 3.45 | 53.98 ± 5.12 | 17.12 ± 4.01 |
 | **OSA-Adapt (ours)** | **~66K** | **71.19 ± 1.49** | **66.07 ± 2.34** | **28.93 ± 2.56** |
 
+### Results Visualization
+
+<p align="center">
+  <img src="figures/data_efficiency_curves.png" width="45%" alt="Data efficiency curves showing OSA-Adapt vs baselines across different labeled patient budgets"/>
+  &nbsp;&nbsp;
+  <img src="figures/confusion_matrices.png" width="45%" alt="Per-severity confusion matrices"/>
+</p>
+
+<p align="center">
+  <em>Left: Data efficiency curves (Fig. 1). OSA-Adapt maintains superior performance even with as few as 5 labeled patients.<br/>
+  Right: Per-severity confusion matrices (Fig. 4). Note the improved N1 detection in severe OSA patients.</em>
+</p>
+
+> To generate these figures from your own results, run: `python experiments/generate_paper_figures.py --results_dir results/`
+
 ## Evaluation Metrics
 
 OSA-Adapt reports both standard ML metrics and clinically relevant measures:
@@ -167,11 +183,34 @@ OSA-Adapt includes interfaces for external validation on public sleep datasets:
 - **Sleep-EDF** (Expanded): healthy controls from PhysioNet
 - **ISRUC-Sleep**: multi-channel PSG with diverse patient populations
 
+```bash
+# Validate on ISRUC-Sleep (download from https://sleeptight.isr.uc.pt/)
+python experiments/run_main_experiment.py \
+    --dataset isruc \
+    --data_dir data/isruc/ \
+    --method osa_adapt \
+    --budget 50
+
+# Validate on Sleep-EDF (download from https://physionet.org/content/sleep-edfx/)
+python experiments/run_main_experiment.py \
+    --dataset sleep_edf \
+    --data_dir data/sleep_edf/ \
+    --method osa_adapt \
+    --budget 50
+```
+
+Or use the adapter programmatically:
+
 ```python
 from src.adaptation.public_dataset_adapter import PublicDatasetAdapter
 
+# Load and preprocess ISRUC-Sleep data
 adapter = PublicDatasetAdapter(dataset="isruc", data_path="data/isruc/")
 loader = adapter.get_dataloader(batch_size=128)
+
+# Load Sleep-EDF data
+adapter_edf = PublicDatasetAdapter(dataset="sleep_edf", data_path="data/sleep_edf/")
+loader_edf = adapter_edf.get_dataloader(batch_size=128)
 ```
 
 Cross-dataset experiments demonstrate that severity-aware adaptation generalizes beyond the training domain, validating the ACM hypothesis across populations.

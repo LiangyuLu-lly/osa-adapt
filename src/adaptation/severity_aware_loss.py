@@ -1,15 +1,27 @@
 """
-严重程度感知的N1 Focal Loss
+Severity-Aware N1 Focal Loss (Eq. 3 in the paper)
+
+Extends standard focal loss with severity-dependent focusing for N1 detection:
+
+    L = -α_c · (1 - p_t)^{γ(c,s)} · log(p_t)                    (Eq. 3)
+
+where:
+    γ(c,s) = γ_base + s · Δγ    for class c = N1                  (Eq. 4)
+    γ(c,s) = γ_default           for class c ≠ N1
+
+    s ∈ {0,1,2,3} is the OSA severity level (Normal/Mild/Moderate/Severe)
+    Δγ (gamma_n1_increment) controls how much harder the loss focuses on
+    N1 epochs from more severe patients.
+
+Rationale: Severe OSA causes more sleep fragmentation, making N1 detection
+harder. Higher γ for severe patients forces the model to focus more on
+these difficult-to-classify N1 epochs.
 
 在N1AwareFocalLoss基础上，根据OSA严重程度动态调整focal gamma：
 - Normal (0): gamma_n1 = gamma_n1_base (默认2.5)
-- Mild (1):   gamma_n1 = gamma_n1_base + 1 * increment (默认3.0)
-- Moderate (2): gamma_n1 = gamma_n1_base + 2 * increment (默认3.5)
-- Severe (3): gamma_n1 = gamma_n1_base + 3 * increment (默认4.0)
-
-严重OSA患者的N1更难检测（更多碎片化），需要更强的聚焦。
-
-Requirements: 3.1, 3.2, 3.3, 3.4
+- Mild (1):   gamma_n1 = gamma_n1_base + 1 × increment (默认3.0)
+- Moderate (2): gamma_n1 = gamma_n1_base + 2 × increment (默认3.5)
+- Severe (3): gamma_n1 = gamma_n1_base + 3 × increment (默认4.0)
 """
 
 import torch
@@ -22,12 +34,13 @@ logger = logging.getLogger(__name__)
 
 class SeverityAwareN1Loss(nn.Module):
     """
-    严重程度感知的N1 Focal Loss
+    Severity-Aware N1 Focal Loss (Eq. 3-4).
 
-    核心特性：
-    1. N1使用独立的focal gamma，且gamma随OSA严重程度递增 (Req 3.1, 3.3)
-    2. N1类别权重 >= 其他类别平均权重的n1_weight_multiplier倍 (Req 3.2)
-    3. 全无效标签batch返回零损失，不产生梯度错误 (Req 3.4)
+    Key properties:
+    1. N1 uses a severity-dependent focal γ that increases with OSA severity (Eq. 4)
+    2. N1 class weight ≥ mean(other weights) × n1_weight_multiplier (class balancing)
+    3. Batches with all-invalid labels return zero loss gracefully
+    4. Label smoothing (default 0.05) for regularization
 
     参数:
         num_classes: 睡眠分期类别数（AASM: W, N1, N2, N3, REM = 5）
@@ -135,7 +148,7 @@ class SeverityAwareN1Loss(nn.Module):
         valid_targets = targets[valid_mask]
         valid_severity = severity[valid_mask]
 
-        # 标准交叉熵（不reduction）
+        # Standard cross-entropy (unreduced) with label smoothing
         ce_loss = F.cross_entropy(
             valid_inputs,
             valid_targets,
@@ -143,28 +156,29 @@ class SeverityAwareN1Loss(nn.Module):
             label_smoothing=self.label_smoothing,
         )
 
-        # p_t: 正确类别的概率
+        # p_t = probability assigned to the correct class (Eq. 3)
         p_t = torch.exp(-ce_loss)
 
-        # 严重程度依赖的N1 gamma (Req 3.1, 3.3)
-        # gamma_n1 = gamma_n1_base + severity * gamma_n1_increment
+        # Severity-dependent N1 gamma (Eq. 4):
+        #   γ_N1(s) = γ_base + s · Δγ
+        # where s ∈ {0,1,2,3} is the severity level
         severity_gamma = (
             self.gamma_n1_base + valid_severity.float() * self.gamma_n1_increment
         )
 
-        # N1样本使用severity_gamma，非N1样本使用gamma_default
+        # Per-sample γ: N1 samples use severity_gamma, others use γ_default
         gamma_per_sample = torch.where(
             valid_targets == self.n1_class_index,
             severity_gamma,
             torch.full_like(severity_gamma, self.gamma_default),
         )
 
-        # Focal调制因子
+        # Focal modulation factor: (1 - p_t)^γ  (Eq. 3)
         focal_weight = (1 - p_t) ** gamma_per_sample
 
-        # 应用类别权重 (Req 3.2)
-        # 确保 class_weights 与 inputs 在同一设备上
+        # Apply class weights α_c (Eq. 3)
         class_weights = self.class_weights.to(valid_inputs.device)
         alpha_t = class_weights[valid_targets]
 
+        # Final loss: L = mean( α_c · (1-p_t)^γ · CE )  (Eq. 3)
         return (alpha_t * focal_weight * ce_loss).mean()

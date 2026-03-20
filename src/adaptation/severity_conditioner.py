@@ -1,5 +1,13 @@
 """
-严重程度条件化模块 (Severity Conditioner)
+Severity Conditioner — Clinical Feature Encoder (Eq. 2 in the paper)
+
+Maps patient-level clinical variables to a fixed-dimensional condition vector c
+that drives FiLM modulation. The encoding pipeline:
+
+    c = MLP( [z_norm(AHI, age, BMI) ; Emb(severity) ; Emb(sex)] )     (Eq. 2)
+
+where z_norm is z-score normalization using training-set statistics,
+Emb is a learned embedding lookup, and [;] denotes concatenation.
 
 将患者级别的临床特征（AHI值、OSA严重程度类别、年龄、性别、BMI）
 编码为固定维度的条件向量，用于FiLM适配器的特征调制。
@@ -16,16 +24,20 @@ logger = logging.getLogger(__name__)
 
 class SeverityConditioner(nn.Module):
     """
-    将患者临床特征编码为条件向量
+    Encodes patient clinical features into a condition vector c (Eq. 2).
 
-    输入特征:
-    - AHI值 (连续, 标准化)
-    - OSA严重程度类别 (4类嵌入: Normal/Mild/Moderate/Severe)
-    - 年龄 (连续, 标准化)
-    - 性别 (2类嵌入: Male/Female)
-    - BMI (连续, 标准化)
+    Input features:
+    - AHI (continuous, z-normalized)
+    - OSA severity category (4-class embedding: Normal/Mild/Moderate/Severe)
+    - Age (continuous, z-normalized)
+    - Sex (2-class embedding: Female/Male)
+    - BMI (continuous, z-normalized)
 
-    输出: 固定维度的条件向量 (默认64维)
+    Output: condition vector c ∈ R^{condition_dim} (default 64)
+
+    The two-layer MLP provides sufficient capacity to capture nonlinear
+    interactions between clinical variables while keeping parameter count low
+    (~5K params), consistent with the ACM hypothesis.
     """
 
     def __init__(
@@ -37,23 +49,22 @@ class SeverityConditioner(nn.Module):
     ):
         """
         Args:
-            condition_dim: 输出条件向量的维度
-            severity_classes: OSA严重程度类别数 (Normal/Mild/Moderate/Severe)
-            sex_classes: 性别类别数 (Female/Male)
-            embedding_dim: 分类特征嵌入维度
+            condition_dim: Output condition vector dimensionality.
+            severity_classes: Number of OSA severity levels (Normal/Mild/Moderate/Severe).
+            sex_classes: Number of sex categories (Female/Male).
+            embedding_dim: Embedding dimension for categorical features.
         """
         super().__init__()
         self.condition_dim = condition_dim
 
-        # 分类特征嵌入
+        # Categorical feature embeddings (Eq. 2: Emb(severity), Emb(sex))
         self.severity_embedding = nn.Embedding(severity_classes, embedding_dim)
         self.sex_embedding = nn.Embedding(sex_classes, embedding_dim)
 
-        # 连续特征: AHI + 年龄 + BMI = 3维
-        # 分类特征: severity_emb + sex_emb = 2 * embedding_dim
+        # Input dim: 3 continuous (AHI, age, BMI) + 2 × embedding_dim (severity, sex)
         input_dim = 3 + 2 * embedding_dim
 
-        # 两层MLP映射
+        # Two-layer MLP: concat features → condition vector c (Eq. 2)
         self.mlp = nn.Sequential(
             nn.Linear(input_dim, condition_dim),
             nn.ReLU(),
